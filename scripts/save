@@ -35,12 +35,6 @@ brew install zsh-autosuggestions zsh-syntax-highlighting
 # Initialize Atuin
 atuin import auto
 atuin init zsh > /dev/null
-# Install Rust
-if ! command -v rustup &> /dev/null; then
-    echo "Installing Rust via rustup..."
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    source "$HOME/.cargo/env"
-fi
 {{ else if eq .chezmoi.os "linux" }}
 # Linux setup
 echo "Installing packages for Linux $CPU_ARCH..."
@@ -112,13 +106,6 @@ else
     echo "Please install zsh and neofetch manually."
 fi
 
-# Install Rust via rustup
-if ! command -v rustup &> /dev/null; then
-    echo "Installing Rust via rustup..."
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    source "$HOME/.cargo/env"
-fi
-
 # Install starship if not available
 if ! command -v starship &> /dev/null; then
     echo "Installing Starship..."
@@ -156,31 +143,105 @@ if ! command -v wezterm &> /dev/null; then
                 echo "For Arch-based systems, please install WezTerm from the AUR:"
                 echo "yay -S wezterm-bin"
                 LATEST_RELEASE_URL=""
+            else
+                LATEST_RELEASE_URL="https://github.com/wez/wezterm/releases/download/$FALLBACK_VERSION/wezterm-$FALLBACK_VERSION-Ubuntu20.04.AppImage"
             fi
         fi
+    elif [ "$CPU_ARCH" = "arm64" ]; then
+        # ARM64 architecture
+        echo "Looking for arm64/aarch64 binaries"
+        # Get the latest version for ARM64
+        LATEST_RELEASE_URL=$(curl -s https://api.github.com/repos/wez/wezterm/releases/latest | grep "browser_download_url.*wezterm-.*arm64\." | head -n 1 | cut -d '"' -f 4)
         
-        if [ -n "$LATEST_RELEASE_URL" ]; then
-            echo "Downloading WezTerm from $LATEST_RELEASE_URL"
-            FILENAME=$(basename "$LATEST_RELEASE_URL")
-            curl -LO "$LATEST_RELEASE_URL"
-            
-            # Install based on file type
-            if echo "$FILENAME" | grep -q "\.deb$"; then
-                sudo apt install -y "./$FILENAME" || {
-                    echo "DEB installation failed. Please install WezTerm manually."
-                }
-            elif echo "$FILENAME" | grep -q "\.rpm$"; then
-                sudo dnf install -y "./$FILENAME" || {
-                    echo "RPM installation failed. Please install WezTerm manually."
-                }
-            else
-                echo "Unknown package format for WezTerm. Please install manually."
-            fi
+        if [ -z "$LATEST_RELEASE_URL" ]; then
+            # For arm64, use AppImage as fallback as it's more likely to work
+            echo "No prebuilt ARM packages found. Will try to build from source if Rust is available."
         fi
     else
-        # For ARM or other architectures
-        echo "Pre-built packages for WezTerm are primarily for amd64 architecture."
-        echo "Please install WezTerm manually for your $CPU_ARCH architecture."
+        # Other architectures - no pre-built packages usually available
+        echo "No prebuilt packages available for $CPU_ARCH architecture. Will try to build from source if Rust is available."
+        LATEST_RELEASE_URL=""
+    fi
+    
+    if [ -n "$LATEST_RELEASE_URL" ]; then
+        echo "Downloading WezTerm from $LATEST_RELEASE_URL"
+        FILENAME=$(basename "$LATEST_RELEASE_URL")
+        curl -LO "$LATEST_RELEASE_URL"
+        
+        # Install based on file type
+        if echo "$FILENAME" | grep -q "\.deb$"; then
+            sudo apt install -y "./$FILENAME" || {
+                echo "DEB installation failed. This may be due to architecture mismatch."
+                echo "Falling back to AppImage installation."
+                # Try AppImage instead
+                APPIMAGE_URL=$(curl -s https://api.github.com/repos/wez/wezterm/releases/latest | grep "browser_download_url.*AppImage" | head -n 1 | cut -d '"' -f 4)
+                if [ -n "$APPIMAGE_URL" ]; then
+                    curl -LO "$APPIMAGE_URL"
+                    APPIMAGE_FILE=$(basename "$APPIMAGE_URL")
+                    chmod +x "./$APPIMAGE_FILE"
+                    mkdir -p ~/.local/bin
+                    mv "./$APPIMAGE_FILE" ~/.local/bin/wezterm
+                    echo "AppImage installed to ~/.local/bin/wezterm"
+                else
+                    echo "No AppImage available. Consider building from source."
+                fi
+            }
+        elif echo "$FILENAME" | grep -q "\.rpm$"; then
+            sudo dnf install -y "./$FILENAME" || {
+                echo "RPM installation failed. This may be due to architecture mismatch."
+            }
+        elif echo "$FILENAME" | grep -q "\.AppImage$"; then
+            chmod +x "./$FILENAME"
+            mkdir -p ~/.local/bin
+            mv "./$FILENAME" ~/.local/bin/wezterm
+            echo "AppImage installed to ~/.local/bin/wezterm"
+        else
+            echo "Unknown package format for WezTerm. Please install manually."
+        fi
+    else
+        # If no prebuilt packages are available, try building from source if rust is available
+        if command -v cargo &> /dev/null; then
+            echo "Building WezTerm from source using Cargo..."
+            
+            # Install build dependencies
+            if [ "$DISTRO" = "ubuntu" ] || [ "$DISTRO" = "debian" ] || [ "$DISTRO" = "pop" ] || [ "$DISTRO" = "linuxmint" ]; then
+                sudo apt update
+                sudo apt install -y build-essential cmake libssl-dev libfontconfig1-dev libx11-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxkbcommon-dev
+            elif [ "$DISTRO" = "fedora" ]; then
+                sudo dnf group install -y "C Development Tools and Libraries"
+                sudo dnf install -y cmake openssl-devel fontconfig-devel libX11-devel libxcb-devel libxkbcommon-devel
+            elif [ "$DISTRO" = "arch" ] || [ "$DISTRO" = "manjaro" ]; then
+                sudo pacman -Sy base-devel cmake fontconfig libx11 libxcb libxkbcommon
+            fi
+            
+            # Clone and build
+            git clone --depth=1 https://github.com/wez/wezterm.git
+            cd wezterm || exit 1
+            cargo build --release
+            
+            # Install
+            mkdir -p ~/.local/bin
+            cp target/release/wezterm ~/.local/bin/
+            cp target/release/wezterm-gui ~/.local/bin/
+            cp target/release/wezterm-mux-server ~/.local/bin/
+            cp assets/icon/terminal.png ~/.local/share/icons/wezterm.png
+            
+            # Create a desktop entry
+            mkdir -p ~/.local/share/applications
+            cat > ~/.local/share/applications/wezterm.desktop << EOL
+[Desktop Entry]
+Name=WezTerm
+Comment=Wez's Terminal Emulator
+Exec=${HOME}/.local/bin/wezterm
+Icon=${HOME}/.local/share/icons/wezterm.png
+Terminal=false
+Type=Application
+Categories=System;TerminalEmulator;
+EOL
+            echo "WezTerm built and installed to ~/.local/bin/"
+        else
+            echo "Could not install WezTerm automatically. Please install it manually."
+        fi
     fi
     
     # Clean up
@@ -192,42 +253,47 @@ fi
 if ! command -v btm &> /dev/null; then
     echo "Installing bottom for $CPU_ARCH..."
     
-    # Try using the package manager first
     if [ "$DISTRO" = "ubuntu" ] || [ "$DISTRO" = "debian" ] || [ "$DISTRO" = "pop" ] || [ "$DISTRO" = "linuxmint" ]; then
-        # Try apt first (newer versions may have bottom)
-        sudo apt install -y bottom 2>/dev/null || {
-            # If apt fails, try architecture-specific packages
-            TEMP_DIR=$(mktemp -d)
-            cd "$TEMP_DIR" || exit 1
-            
-            BTM_VERSION=$(curl -s https://api.github.com/repos/ClementTsang/bottom/releases/latest | grep tag_name | cut -d '"' -f 4)
+        TEMP_DIR=$(mktemp -d)
+        cd "$TEMP_DIR" || exit 1
         
-            # Download architecture-specific package
-            if [ "$CPU_ARCH" = "amd64" ]; then
-                echo "Downloading bottom for x86_64/amd64"
-                curl -LO "https://github.com/ClementTsang/bottom/releases/download/${BTM_VERSION}/bottom_${BTM_VERSION}-1_amd64.deb"
-                sudo apt install -y "./bottom_${BTM_VERSION}-1_amd64.deb"
-            elif [ "$CPU_ARCH" = "arm64" ]; then
-                echo "Downloading bottom for arm64/aarch64"
-                curl -LO "https://github.com/ClementTsang/bottom/releases/download/${BTM_VERSION}/bottom_${BTM_VERSION}-1_arm64.deb"
-                sudo apt install -y "./bottom_${BTM_VERSION}-1_arm64.deb"
-            elif [ "$CPU_ARCH" = "armhf" ]; then
-                echo "Downloading bottom for armhf"
-                curl -LO "https://github.com/ClementTsang/bottom/releases/download/${BTM_VERSION}/bottom_${BTM_VERSION}-1_armhf.deb"
-                sudo apt install -y "./bottom_${BTM_VERSION}-1_armhf.deb"
+        BTM_VERSION=$(curl -s https://api.github.com/repos/ClementTsang/bottom/releases/latest | grep tag_name | cut -d '"' -f 4)
+        
+        # Download architecture-specific package
+        if [ "$CPU_ARCH" = "amd64" ]; then
+            echo "Downloading bottom for x86_64/amd64"
+            curl -LO "https://github.com/ClementTsang/bottom/releases/download/${BTM_VERSION}/bottom_${BTM_VERSION}-1_amd64.deb"
+            sudo apt install -y "./bottom_${BTM_VERSION}-1_amd64.deb"
+        elif [ "$CPU_ARCH" = "arm64" ]; then
+            echo "Downloading bottom for arm64/aarch64"
+            curl -LO "https://github.com/ClementTsang/bottom/releases/download/${BTM_VERSION}/bottom_${BTM_VERSION}-1_arm64.deb"
+            sudo apt install -y "./bottom_${BTM_VERSION}-1_arm64.deb"
+        elif [ "$CPU_ARCH" = "armhf" ]; then
+            echo "Downloading bottom for armhf"
+            curl -LO "https://github.com/ClementTsang/bottom/releases/download/${BTM_VERSION}/bottom_${BTM_VERSION}-1_armhf.deb"
+            sudo apt install -y "./bottom_${BTM_VERSION}-1_armhf.deb"
+        else
+            echo "No prebuilt package available for $CPU_ARCH. Trying to build from source."
+            if command -v cargo &> /dev/null; then
+                cargo install bottom
             else
-                echo "No prebuilt bottom package available for $CPU_ARCH. Please install it manually."
+                echo "Cargo not available to build from source. Please install bottom manually."
             fi
-            
-            cd - || exit 1
-            rm -rf "$TEMP_DIR"
-        }
+        fi
+        
+        cd - || exit 1
+        rm -rf "$TEMP_DIR"
     elif [ "$DISTRO" = "fedora" ]; then
         sudo dnf install -y bottom
     elif [ "$DISTRO" = "arch" ] || [ "$DISTRO" = "manjaro" ]; then
         sudo pacman -Sy bottom
     else
-        echo "Could not install bottom. Please install it manually."
+        # Install with cargo if available
+        if command -v cargo &> /dev/null; then
+            cargo install bottom
+        else
+            echo "Could not install bottom. Please install it manually."
+        fi
     fi
 fi
 
@@ -281,12 +347,6 @@ fi
 if [ -d "$HOME/.local/bin" ] && [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
     echo "Adding ~/.local/bin to PATH..."
     echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"
-fi
-
-# Add Cargo to PATH if not already there
-if [ -d "$HOME/.cargo/bin" ] && [[ ":$PATH:" != *":$HOME/.cargo/bin:"* ]]; then
-    echo "Adding ~/.cargo/bin to PATH..."
-    echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> "$HOME/.zshrc"
 fi
 
 echo "All packages installed successfully!"
