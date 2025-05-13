@@ -73,3 +73,6 @@ fi
 # Key bindings (work on both platforms)
 bindkey "^[[1;3C" forward-word
 bindkey "^[[1;3D" backward-word
+
+export PATH="$HOME/.local/bin:$PATH"
+export PATH="$HOME/.cargo/bin:$PATH"
