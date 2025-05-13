@@ -1,0 +1,29 @@
+
+. "$HOME/.atuin/bin/env"
+
+
+eval "$(atuin init zsh)"
+
+# Starship
+eval "$(starship init zsh)"
+
+# Disable underline
+(( ${+ZSH_HIGHLIGHT_STYLES} )) || typeset -A ZSH_HIGHLIGHT_STYLES
+ZSH_HIGHLIGHT_STYLES[path]=none
+ZSH_HIGHLIGHT_STYLES[path_prefix]=none
+
+# zsh-autosuggestions
+source $(brew --prefix)/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+
+# zsh-syntax-highlighting
+source $(brew --prefix)/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+
+source /Users/gustafeden/.config/broot/launcher/bash/br
+
+neofetch
+
+
+bindkey "^[[1;3C" forward-word
+bindkey "^[[1;3D" backward-word 
+bindkey “^[[D” beginning-of-line
+bindkey “^[[C” end-of-line
