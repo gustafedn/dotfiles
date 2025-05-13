@@ -3,105 +3,261 @@
 # Set Homebrew environment variables to avoid warnings
 export HOMEBREW_NO_INSTALL_CLEANUP=1
 export HOMEBREW_NO_ENV_HINTS=1
-
 echo "Installing packages with Homebrew..."
-
-# Core tools
-brew install wezterm starship zsh neovim neofetch bottom
-
+# Core tools (removed zsh since macOS already has it)
+brew install wezterm starship neovim neofetch bottom
 # Install Atuin
 brew install atuin
-
 # Install JetBrains Mono Nerd Font
 # Direct download instead of using deprecated cask-fonts
 mkdir -p ~/Library/Fonts
 curl -L -o ~/Library/Fonts/JetBrains_Mono_Bold_Nerd_Font_Complete.ttf https://github.com/ryanoasis/nerd-fonts/raw/master/patched-fonts/JetBrainsMono/Bold/JetBrainsMono%20Bold%20Nerd%20Font%20Complete.ttf
 curl -L -o ~/Library/Fonts/JetBrains_Mono_Regular_Nerd_Font_Complete.ttf https://github.com/ryanoasis/nerd-fonts/raw/master/patched-fonts/JetBrainsMono/Regular/JetBrainsMono%20Regular%20Nerd%20Font%20Complete.ttf
-
 # Install zsh plugins
 brew install zsh-autosuggestions zsh-syntax-highlighting
-
 # Initialize Atuin
 atuin import auto
 atuin init zsh > /dev/null
-
 {{ else if eq .chezmoi.os "linux" }}
-# Linux setup (assuming Debian/Ubuntu)
-echo "Installing packages with apt..."
+# Linux setup for AMD64
+echo "Installing packages for Linux AMD64..."
 
-# Update package lists
-sudo apt update
+# Detect the Linux distribution
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    DISTRO="$ID"
+    VERSION_ID="$VERSION_ID"
+elif [ -f /etc/lsb-release ]; then
+    . /etc/lsb-release
+    DISTRO="$DISTRIB_ID"
+    VERSION_ID="$DISTRIB_RELEASE"
+else
+    DISTRO=$(uname -s)
+    VERSION_ID=$(uname -r)
+fi
 
-# Install core packages available in apt
-sudo apt install -y zsh neofetch
+echo "Detected distribution: $DISTRO $VERSION_ID"
 
-# Install starship if not available in apt
+# Ensure we have curl installed for subsequent steps
+if ! command -v curl &> /dev/null; then
+    echo "Installing curl..."
+    if [ "$DISTRO" = "ubuntu" ] || [ "$DISTRO" = "debian" ] || [ "$DISTRO" = "pop" ] || [ "$DISTRO" = "linuxmint" ]; then
+        sudo apt update && sudo apt install -y curl
+    elif [ "$DISTRO" = "fedora" ]; then
+        sudo dnf install -y curl
+    elif [ "$DISTRO" = "arch" ] || [ "$DISTRO" = "manjaro" ]; then
+        sudo pacman -Sy curl
+    elif [ "$DISTRO" = "opensuse-leap" ] || [ "$DISTRO" = "opensuse-tumbleweed" ]; then
+        sudo zypper install -y curl
+    else
+        echo "Could not install curl. Please install it manually and rerun the script."
+        exit 1
+    fi
+fi
+
+# Install packages based on the distribution
+if [ "$DISTRO" = "ubuntu" ] || [ "$DISTRO" = "debian" ] || [ "$DISTRO" = "pop" ] || [ "$DISTRO" = "linuxmint" ]; then
+    echo "Installing packages with apt..."
+    sudo apt update
+    sudo apt install -y zsh neofetch
+    
+    # Install zsh plugins
+    echo "Installing zsh plugins..."
+    sudo apt install -y zsh-autosuggestions zsh-syntax-highlighting || {
+        echo "Installing zsh plugins manually..."
+        mkdir -p ~/.zsh
+        git clone https://github.com/zsh-users/zsh-autosuggestions ~/.zsh/zsh-autosuggestions
+        git clone https://github.com/zsh-users/zsh-syntax-highlighting ~/.zsh/zsh-syntax-highlighting
+    }
+elif [ "$DISTRO" = "fedora" ]; then
+    echo "Installing packages with dnf..."
+    sudo dnf install -y zsh neofetch zsh-autosuggestions zsh-syntax-highlighting
+elif [ "$DISTRO" = "arch" ] || [ "$DISTRO" = "manjaro" ]; then
+    echo "Installing packages with pacman..."
+    sudo pacman -Sy zsh neofetch zsh-autosuggestions zsh-syntax-highlighting
+elif [ "$DISTRO" = "opensuse-leap" ] || [ "$DISTRO" = "opensuse-tumbleweed" ]; then
+    echo "Installing packages with zypper..."
+    sudo zypper install -y zsh neofetch
+    
+    # Install zsh plugins manually
+    echo "Installing zsh plugins manually..."
+    mkdir -p ~/.zsh
+    git clone https://github.com/zsh-users/zsh-autosuggestions ~/.zsh/zsh-autosuggestions
+    git clone https://github.com/zsh-users/zsh-syntax-highlighting ~/.zsh/zsh-syntax-highlighting
+else
+    echo "Unsupported distribution for automatic package installation."
+    echo "Please install zsh and neofetch manually."
+fi
+
+# Install starship if not available
 if ! command -v starship &> /dev/null; then
     echo "Installing Starship..."
     curl -sS https://starship.rs/install.sh | sh -s -- -y
 fi
 
-# Install WezTerm if not available in apt
+# Install WezTerm
 if ! command -v wezterm &> /dev/null; then
     echo "Installing WezTerm..."
-    curl -LO https://github.com/wez/wezterm/releases/download/nightly/wezterm-nightly.Ubuntu20.04.deb
-    sudo apt install -y ./wezterm-nightly.Ubuntu20.04.deb
-    rm ./wezterm-nightly.Ubuntu20.04.deb
+    
+    # Create a temporary directory for downloads
+    TEMP_DIR=$(mktemp -d)
+    cd "$TEMP_DIR" || exit 1
+    
+    # Get the latest version
+    LATEST_RELEASE_URL=$(curl -s https://api.github.com/repos/wez/wezterm/releases/latest | grep "browser_download_url.*wezterm-.*amd64\..*" | head -n 1 | cut -d '"' -f 4)
+    
+    if [ -z "$LATEST_RELEASE_URL" ]; then
+        echo "Could not determine latest WezTerm release. Using fallback URL."
+        if [ "$DISTRO" = "ubuntu" ] || [ "$DISTRO" = "debian" ] || [ "$DISTRO" = "pop" ] || [ "$DISTRO" = "linuxmint" ]; then
+            if [ "${VERSION_ID%%.*}" -ge "22" ]; then
+                LATEST_RELEASE_URL="https://github.com/wez/wezterm/releases/download/20230712-072601-f4abf8fd/wezterm-20230712-072601-f4abf8fd.Ubuntu22.04.deb"
+            else
+                LATEST_RELEASE_URL="https://github.com/wez/wezterm/releases/download/20230712-072601-f4abf8fd/wezterm-20230712-072601-f4abf8fd.Ubuntu20.04.deb"
+            fi
+        elif [ "$DISTRO" = "fedora" ]; then
+            LATEST_RELEASE_URL="https://github.com/wez/wezterm/releases/download/20230712-072601-f4abf8fd/wezterm-20230712-072601-f4abf8fd.fedora36.rpm"
+        elif [ "$DISTRO" = "arch" ] || [ "$DISTRO" = "manjaro" ]; then
+            echo "For Arch-based systems, please install WezTerm from the AUR:"
+            echo "yay -S wezterm-bin"
+            LATEST_RELEASE_URL=""
+        else
+            LATEST_RELEASE_URL="https://github.com/wez/wezterm/releases/download/20230712-072601-f4abf8fd/wezterm-20230712-072601-f4abf8fd-Ubuntu20.04.AppImage"
+        fi
+    fi
+    
+    if [ -n "$LATEST_RELEASE_URL" ]; then
+        echo "Downloading WezTerm from $LATEST_RELEASE_URL"
+        FILENAME=$(basename "$LATEST_RELEASE_URL")
+        curl -LO "$LATEST_RELEASE_URL"
+        
+        # Install based on file type
+        if echo "$FILENAME" | grep -q "\.deb$"; then
+            sudo apt install -y "./$FILENAME"
+        elif echo "$FILENAME" | grep -q "\.rpm$"; then
+            sudo dnf install -y "./$FILENAME"
+        elif echo "$FILENAME" | grep -q "\.AppImage$"; then
+            chmod +x "./$FILENAME"
+            mkdir -p ~/.local/bin
+            mv "./$FILENAME" ~/.local/bin/wezterm
+            echo "AppImage installed to ~/.local/bin/wezterm"
+        else
+            echo "Unknown package format for WezTerm. Please install manually."
+        fi
+    fi
+    
+    # Clean up
+    cd - || exit 1
+    rm -rf "$TEMP_DIR"
 fi
 
-# Install Neovim if not in apt or outdated
-if ! command -v nvim &> /dev/null || [ "$(nvim --version | head -n1 | cut -d ' ' -f2 | cut -d'.' -f1)" -lt "0" ]; then
+# Install Neovim
+if ! command -v nvim &> /dev/null || [ "$(nvim --version | head -n1 | awk '{print $2}' | cut -d'.' -f1)" -lt "0" ]; then
     echo "Installing Neovim..."
-    sudo apt install -y ninja-build gettext cmake unzip curl
-    git clone https://github.com/neovim/neovim
-    cd neovim
-    git checkout stable
-    make CMAKE_BUILD_TYPE=RelWithDebInfo
-    sudo make install
-    cd ..
-    rm -rf neovim
+    
+    if [ "$DISTRO" = "ubuntu" ] || [ "$DISTRO" = "debian" ] || [ "$DISTRO" = "pop" ] || [ "$DISTRO" = "linuxmint" ]; then
+        # Try the PPA first
+        sudo apt install -y software-properties-common
+        sudo add-apt-repository -y ppa:neovim-ppa/stable
+        sudo apt update
+        sudo apt install -y neovim
+    elif [ "$DISTRO" = "fedora" ]; then
+        sudo dnf install -y neovim
+    elif [ "$DISTRO" = "arch" ] || [ "$DISTRO" = "manjaro" ]; then
+        sudo pacman -Sy neovim
+    else
+        # Fallback to AppImage
+        mkdir -p ~/.local/bin
+        curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim.appimage
+        chmod +x nvim.appimage
+        mv nvim.appimage ~/.local/bin/nvim
+        echo "Neovim AppImage installed to ~/.local/bin/nvim"
+    fi
 fi
 
 # Install bottom
 if ! command -v btm &> /dev/null; then
     echo "Installing bottom..."
-    curl -LO https://github.com/ClementTsang/bottom/releases/download/0.9.6/bottom_0.9.6_amd64.deb
-    sudo apt install -y ./bottom_0.9.6_amd64.deb
-    rm ./bottom_0.9.6_amd64.deb
+    
+    if [ "$DISTRO" = "ubuntu" ] || [ "$DISTRO" = "debian" ] || [ "$DISTRO" = "pop" ] || [ "$DISTRO" = "linuxmint" ]; then
+        TEMP_DIR=$(mktemp -d)
+        cd "$TEMP_DIR" || exit 1
+        
+        BTM_VERSION=$(curl -s https://api.github.com/repos/ClementTsang/bottom/releases/latest | grep tag_name | cut -d '"' -f 4)
+        if [ -z "$BTM_VERSION" ]; then
+            BTM_VERSION="0.9.6" # Fallback version
+        fi
+        BTM_VERSION=${BTM_VERSION#v} # Remove 'v' prefix if present
+        
+        curl -LO "https://github.com/ClementTsang/bottom/releases/download/${BTM_VERSION}/bottom_${BTM_VERSION}_amd64.deb"
+        sudo apt install -y "./bottom_${BTM_VERSION}_amd64.deb"
+        
+        cd - || exit 1
+        rm -rf "$TEMP_DIR"
+    elif [ "$DISTRO" = "fedora" ]; then
+        sudo dnf install -y bottom
+    elif [ "$DISTRO" = "arch" ] || [ "$DISTRO" = "manjaro" ]; then
+        sudo pacman -Sy bottom
+    else
+        # Install with cargo if available
+        if command -v cargo &> /dev/null; then
+            cargo install bottom
+        else
+            echo "Could not install bottom. Please install it manually."
+        fi
+    fi
 fi
 
 # Install Atuin
 if ! command -v atuin &> /dev/null; then
     echo "Installing Atuin..."
     bash <(curl https://raw.githubusercontent.com/atuinsh/atuin/main/install.sh)
-    atuin import auto
-    atuin init zsh > /dev/null
+    atuin import auto || true
+    atuin init zsh > /dev/null 2>&1 || true
 fi
 
 # Install JetBrains Mono Nerd Font
 echo "Installing JetBrains Mono Nerd Font..."
 mkdir -p ~/.local/share/fonts
-cd ~/.local/share/fonts
+TEMP_DIR=$(mktemp -d)
+cd "$TEMP_DIR" || exit 1
 curl -fLO https://github.com/ryanoasis/nerd-fonts/releases/download/v3.0.2/JetBrainsMono.zip
-unzip JetBrainsMono.zip
-rm JetBrainsMono.zip
+unzip JetBrainsMono.zip -d ~/.local/share/fonts
+cd - || exit 1
+rm -rf "$TEMP_DIR"
 fc-cache -f -v
-
-# Install zsh plugins
-echo "Installing zsh plugins..."
-sudo apt install -y zsh-autosuggestions zsh-syntax-highlighting || {
-    # If not available in apt, install manually
-    mkdir -p ~/.zsh
-    git clone https://github.com/zsh-users/zsh-autosuggestions ~/.zsh/zsh-autosuggestions
-    git clone https://github.com/zsh-users/zsh-syntax-highlighting ~/.zsh/zsh-syntax-highlighting
-}
-
 {{ end }}
 
-# Set zsh as the default shell for both platforms
+# Set zsh as the default shell for both platforms if it's not already
 if [ "$SHELL" != "$(which zsh)" ]; then
     echo "Setting zsh as the default shell..."
-    chsh -s "$(which zsh)"
+    
+    # On macOS, the system zsh is at /bin/zsh
+    {{ if eq .chezmoi.os "darwin" }}
+    if [ -f /bin/zsh ] && [ -x /bin/zsh ]; then
+        chsh -s /bin/zsh || {
+            echo "Failed to change shell automatically. Please run this command manually:"
+            echo "chsh -s /bin/zsh"
+        }
+    else
+        echo "System zsh not found at /bin/zsh. Using 'which zsh' instead."
+        chsh -s "$(which zsh)" || {
+            echo "Failed to change shell automatically. Please run this command manually:"
+            echo "chsh -s $(which zsh)"
+        }
+    fi
+    {{ else }}
+    # On Linux, we use which zsh
+    chsh -s "$(which zsh)" || {
+        echo "Failed to change shell automatically. Please run this command manually:"
+        echo "chsh -s $(which zsh)"
+    }
+    {{ end }}
+fi
+
+# Add PATH additions
+if [ -d "$HOME/.local/bin" ] && [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
+    echo "Adding ~/.local/bin to PATH..."
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$HOME/.zshrc"
 fi
 
 echo "All packages installed successfully!"
