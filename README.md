@@ -1,3 +1,8 @@
+Usage:
+```
+sh -c "$(curl -fsLS get.chezmoi.io)" -- init --apply gustafedn
+```
+
 1.	chezmoi add ~/.whatever on your main machine
 2.	chezmoi cd to edit, git commit/push to sync
 3.	On a new machine: chezmoi init --apply git@github.com-personal:gustafedn/dotfiles.git
