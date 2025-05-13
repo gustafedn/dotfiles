@@ -245,7 +245,7 @@ mkdir -p ~/.local/share/fonts
 TEMP_DIR=$(mktemp -d)
 cd "$TEMP_DIR" || exit 1
 curl -fLO https://github.com/ryanoasis/nerd-fonts/releases/download/v3.0.2/JetBrainsMono.zip
-unzip JetBrainsMono.zip -d ~/.local/share/fonts
+unzip -o JetBrainsMono.zip -d ~/.local/share/fonts
 cd - || exit 1
 rm -rf "$TEMP_DIR"
 fc-cache -f -v
