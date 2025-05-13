@@ -1,12 +1,9 @@
 #!/bin/sh
+{{ if eq .chezmoi.os "darwin" }}
+# Set Homebrew environment variables to avoid warnings
+export HOMEBREW_NO_INSTALL_CLEANUP=1
+export HOMEBREW_NO_ENV_HINTS=1
 
-# Exit on error
-set -e
-
-echo "Setting up packages and configurations for {{ .chezmoi.os }}..."
-
-{{ if eq .chezmoi.os "darwin" -}}
-# macOS setup using Homebrew
 echo "Installing packages with Homebrew..."
 
 # Core tools
@@ -16,8 +13,10 @@ brew install wezterm starship zsh neovim neofetch bottom
 brew install atuin
 
 # Install JetBrains Mono Nerd Font
-brew tap homebrew/cask-fonts
-brew install --cask font-jetbrains-mono-nerd-font
+# Direct download instead of using deprecated cask-fonts
+mkdir -p ~/Library/Fonts
+curl -L -o ~/Library/Fonts/JetBrains_Mono_Bold_Nerd_Font_Complete.ttf https://github.com/ryanoasis/nerd-fonts/raw/master/patched-fonts/JetBrainsMono/Bold/JetBrainsMono%20Bold%20Nerd%20Font%20Complete.ttf
+curl -L -o ~/Library/Fonts/JetBrains_Mono_Regular_Nerd_Font_Complete.ttf https://github.com/ryanoasis/nerd-fonts/raw/master/patched-fonts/JetBrainsMono/Regular/JetBrainsMono%20Regular%20Nerd%20Font%20Complete.ttf
 
 # Install zsh plugins
 brew install zsh-autosuggestions zsh-syntax-highlighting
@@ -26,7 +25,7 @@ brew install zsh-autosuggestions zsh-syntax-highlighting
 atuin import auto
 atuin init zsh > /dev/null
 
-{{ else if eq .chezmoi.os "linux" -}}
+{{ else if eq .chezmoi.os "linux" }}
 # Linux setup (assuming Debian/Ubuntu)
 echo "Installing packages with apt..."
 
@@ -97,7 +96,7 @@ sudo apt install -y zsh-autosuggestions zsh-syntax-highlighting || {
     git clone https://github.com/zsh-users/zsh-syntax-highlighting ~/.zsh/zsh-syntax-highlighting
 }
 
-{{ end -}}
+{{ end }}
 
 # Set zsh as the default shell for both platforms
 if [ "$SHELL" != "$(which zsh)" ]; then
