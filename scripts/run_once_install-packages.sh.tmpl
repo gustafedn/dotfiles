@@ -5,7 +5,7 @@ export HOMEBREW_NO_INSTALL_CLEANUP=1
 export HOMEBREW_NO_ENV_HINTS=1
 echo "Installing packages with Homebrew..."
 # Core tools (removed zsh since macOS already has it)
-brew install wezterm starship neovim neofetch bottom
+brew install wezterm starship neofetch bottom
 # Install Atuin
 brew install atuin
 # Install JetBrains Mono Nerd Font
@@ -148,30 +148,6 @@ if ! command -v wezterm &> /dev/null; then
     # Clean up
     cd - || exit 1
     rm -rf "$TEMP_DIR"
-fi
-
-# Install Neovim
-if ! command -v nvim &> /dev/null || [ "$(nvim --version | head -n1 | awk '{print $2}' | cut -d'.' -f1)" -lt "0" ]; then
-    echo "Installing Neovim..."
-    
-    if [ "$DISTRO" = "ubuntu" ] || [ "$DISTRO" = "debian" ] || [ "$DISTRO" = "pop" ] || [ "$DISTRO" = "linuxmint" ]; then
-        # Try the PPA first
-        sudo apt install -y software-properties-common
-        sudo add-apt-repository -y ppa:neovim-ppa/stable
-        sudo apt update
-        sudo apt install -y neovim
-    elif [ "$DISTRO" = "fedora" ]; then
-        sudo dnf install -y neovim
-    elif [ "$DISTRO" = "arch" ] || [ "$DISTRO" = "manjaro" ]; then
-        sudo pacman -Sy neovim
-    else
-        # Fallback to AppImage
-        mkdir -p ~/.local/bin
-        curl -LO https://github.com/neovim/neovim/releases/latest/download/nvim.appimage
-        chmod +x nvim.appimage
-        mv nvim.appimage ~/.local/bin/nvim
-        echo "Neovim AppImage installed to ~/.local/bin/nvim"
-    fi
 fi
 
 # Install bottom
