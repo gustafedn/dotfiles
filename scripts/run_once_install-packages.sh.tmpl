@@ -1,0 +1,108 @@
+#!/bin/sh
+
+# Exit on error
+set -e
+
+echo "Setting up packages and configurations for {{ .chezmoi.os }}..."
+
+{{ if eq .chezmoi.os "darwin" -}}
+# macOS setup using Homebrew
+echo "Installing packages with Homebrew..."
+
+# Core tools
+brew install wezterm starship zsh neovim neofetch bottom
+
+# Install Atuin
+brew install atuin
+
+# Install JetBrains Mono Nerd Font
+brew tap homebrew/cask-fonts
+brew install --cask font-jetbrains-mono-nerd-font
+
+# Install zsh plugins
+brew install zsh-autosuggestions zsh-syntax-highlighting
+
+# Initialize Atuin
+atuin import auto
+atuin init zsh > /dev/null
+
+{{ else if eq .chezmoi.os "linux" -}}
+# Linux setup (assuming Debian/Ubuntu)
+echo "Installing packages with apt..."
+
+# Update package lists
+sudo apt update
+
+# Install core packages available in apt
+sudo apt install -y zsh neofetch
+
+# Install starship if not available in apt
+if ! command -v starship &> /dev/null; then
+    echo "Installing Starship..."
+    curl -sS https://starship.rs/install.sh | sh -s -- -y
+fi
+
+# Install WezTerm if not available in apt
+if ! command -v wezterm &> /dev/null; then
+    echo "Installing WezTerm..."
+    curl -LO https://github.com/wez/wezterm/releases/download/nightly/wezterm-nightly.Ubuntu20.04.deb
+    sudo apt install -y ./wezterm-nightly.Ubuntu20.04.deb
+    rm ./wezterm-nightly.Ubuntu20.04.deb
+fi
+
+# Install Neovim if not in apt or outdated
+if ! command -v nvim &> /dev/null || [ "$(nvim --version | head -n1 | cut -d ' ' -f2 | cut -d'.' -f1)" -lt "0" ]; then
+    echo "Installing Neovim..."
+    sudo apt install -y ninja-build gettext cmake unzip curl
+    git clone https://github.com/neovim/neovim
+    cd neovim
+    git checkout stable
+    make CMAKE_BUILD_TYPE=RelWithDebInfo
+    sudo make install
+    cd ..
+    rm -rf neovim
+fi
+
+# Install bottom
+if ! command -v btm &> /dev/null; then
+    echo "Installing bottom..."
+    curl -LO https://github.com/ClementTsang/bottom/releases/download/0.9.6/bottom_0.9.6_amd64.deb
+    sudo apt install -y ./bottom_0.9.6_amd64.deb
+    rm ./bottom_0.9.6_amd64.deb
+fi
+
+# Install Atuin
+if ! command -v atuin &> /dev/null; then
+    echo "Installing Atuin..."
+    bash <(curl https://raw.githubusercontent.com/atuinsh/atuin/main/install.sh)
+    atuin import auto
+    atuin init zsh > /dev/null
+fi
+
+# Install JetBrains Mono Nerd Font
+echo "Installing JetBrains Mono Nerd Font..."
+mkdir -p ~/.local/share/fonts
+cd ~/.local/share/fonts
+curl -fLO https://github.com/ryanoasis/nerd-fonts/releases/download/v3.0.2/JetBrainsMono.zip
+unzip JetBrainsMono.zip
+rm JetBrainsMono.zip
+fc-cache -f -v
+
+# Install zsh plugins
+echo "Installing zsh plugins..."
+sudo apt install -y zsh-autosuggestions zsh-syntax-highlighting || {
+    # If not available in apt, install manually
+    mkdir -p ~/.zsh
+    git clone https://github.com/zsh-users/zsh-autosuggestions ~/.zsh/zsh-autosuggestions
+    git clone https://github.com/zsh-users/zsh-syntax-highlighting ~/.zsh/zsh-syntax-highlighting
+}
+
+{{ end -}}
+
+# Set zsh as the default shell for both platforms
+if [ "$SHELL" != "$(which zsh)" ]; then
+    echo "Setting zsh as the default shell..."
+    chsh -s "$(which zsh)"
+fi
+
+echo "All packages installed successfully!"

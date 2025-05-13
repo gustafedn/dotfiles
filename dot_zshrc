@@ -1,29 +1,75 @@
+# Determine OS type
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    export OS_TYPE="linux"
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+    export OS_TYPE="macos"
+else
+    export OS_TYPE="unknown"
+fi
 
-. "$HOME/.atuin/bin/env"
+# Atuin setup (works on both platforms)
+if [[ -f "$HOME/.atuin/bin/env" ]]; then
+    . "$HOME/.atuin/bin/env"
+    eval "$(atuin init zsh)"
+fi
 
-
-eval "$(atuin init zsh)"
-
-# Starship
-eval "$(starship init zsh)"
+# Starship setup (works on both platforms)
+if command -v starship &> /dev/null; then
+    eval "$(starship init zsh)"
+fi
 
 # Disable underline
 (( ${+ZSH_HIGHLIGHT_STYLES} )) || typeset -A ZSH_HIGHLIGHT_STYLES
 ZSH_HIGHLIGHT_STYLES[path]=none
 ZSH_HIGHLIGHT_STYLES[path_prefix]=none
 
-# zsh-autosuggestions
-source $(brew --prefix)/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+# zsh plugins setup based on OS
+if [[ "$OS_TYPE" == "macos" ]]; then
+    # macOS (Homebrew) paths
+    if command -v brew &> /dev/null; then
+        # zsh-autosuggestions
+        if [[ -f "$(brew --prefix)/share/zsh-autosuggestions/zsh-autosuggestions.zsh" ]]; then
+            source "$(brew --prefix)/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
+        fi
+        
+        # zsh-syntax-highlighting
+        if [[ -f "$(brew --prefix)/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ]]; then
+            source "$(brew --prefix)/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+        fi
+    fi
+    
+    # broot for macOS
+    if [[ -f "/Users/gustafeden/.config/broot/launcher/bash/br" ]]; then
+        source "/Users/gustafeden/.config/broot/launcher/bash/br"
+    fi
+elif [[ "$OS_TYPE" == "linux" ]]; then
+    # Linux paths for zsh plugins
+    
+    # Common locations for zsh-autosuggestions
+    if [[ -f "/usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh" ]]; then
+        source "/usr/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
+    elif [[ -f "$HOME/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh" ]]; then
+        source "$HOME/.zsh/zsh-autosuggestions/zsh-autosuggestions.zsh"
+    fi
+    
+    # Common locations for zsh-syntax-highlighting
+    if [[ -f "/usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ]]; then
+        source "/usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+    elif [[ -f "$HOME/.zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh" ]]; then
+        source "$HOME/.zsh/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+    fi
+    
+    # broot for Linux
+    if [[ -f "$HOME/.config/broot/launcher/bash/br" ]]; then
+        source "$HOME/.config/broot/launcher/bash/br"
+    fi
+fi
 
-# zsh-syntax-highlighting
-source $(brew --prefix)/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh
+# Run neofetch if available
+if command -v neofetch &> /dev/null; then
+    neofetch
+fi
 
-source /Users/gustafeden/.config/broot/launcher/bash/br
-
-neofetch
-
-
+# Key bindings (work on both platforms)
 bindkey "^[[1;3C" forward-word
-bindkey "^[[1;3D" backward-word 
-bindkey “^[[D” beginning-of-line
-bindkey “^[[C” end-of-line
+bindkey "^[[1;3D" backward-word
