@@ -74,5 +74,18 @@ fi
 bindkey "^[[1;3C" forward-word
 bindkey "^[[1;3D" backward-word
 
+cdprog() {
+  cd ~/elux/dxp-progman
+}
+cdui() {
+  cd elux/dxp-flutter_gui/packages/oven
+}
+runui() {
+  fvm flutter run -d linux lib/main_for_external_screen.dart
+}
+startgui() {
+  sudo systemctl start gdm3
+}
+
 export PATH="$HOME/.local/bin:$PATH"
 export PATH="$HOME/.cargo/bin:$PATH"
