@@ -96,6 +96,7 @@ cm_sync() {
 }
 
 cm_push() {
+  echo "Pushing all changes to dotfiles repo"
   local prev_dir
   prev_dir="$(pwd)"  # Save where we started
 
