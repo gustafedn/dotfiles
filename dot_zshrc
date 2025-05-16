@@ -74,17 +74,60 @@ fi
 bindkey "^[[1;3C" forward-word
 bindkey "^[[1;3D" backward-word
 
-cdprog() {
+alias cm=chezmoi
+
+reload() { 
+  exec zsh 
+}
+dxp_prog() {
   cd ~/elux/dxp-progman
 }
-cdui() {
+dxp_ui() {
   cd elux/dxp-flutter_gui/packages/oven
 }
-runui() {
+run_oven() {
   fvm flutter run -d linux lib/main_for_external_screen.dart
 }
-startgui() {
+start_gdm() {
   sudo systemctl start gdm3
+}
+cm_sync() {
+  cm update && cm apply && exec zsh
+}
+
+cm_push() {
+  local prev_dir
+  prev_dir="$(pwd)"  # Save where we started
+
+  local source_path
+  source_path="$(chezmoi source-path)"
+
+  cd "$source_path" || { echo "Failed to cd to chezmoi source path."; return 1; }
+
+  # Get list of changed files
+  local changes
+  changes=$(git status --porcelain)
+
+  if [[ -z "$changes" ]]; then
+    echo "No changes to commit."
+    cd "$prev_dir"
+    return 0
+  fi
+
+  # Stage everything
+  git add .
+
+  # Generate commit message from changed filenames
+  local summary
+  summary=$(echo "$changes" | awk '{print $2}' | tr '\n' ' ' | sed 's/ $//')
+
+  local msg="update: $summary"
+
+  # Commit and push
+  git commit -m "$msg"
+  git push
+
+  cd "$prev_dir" || echo "Warning: Failed to return to original directory ($prev_dir)"
 }
 
 export PATH="$HOME/.local/bin:$PATH"
